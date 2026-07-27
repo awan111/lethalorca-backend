@@ -2,9 +2,11 @@
   "name": "lethalorca-backend",
   "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "start": "node api/withdraw.js"
+  },
   "dependencies": {
-    "@solana/spl-token": "^0.4.1",
-    "@solana/web3.js": "^1.91.0",
+    "@solana/web3.js": "^1.87.6",
     "bs58": "^5.0.0"
   }
 }
