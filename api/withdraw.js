@@ -1,96 +1,84 @@
+import { Connection, Keypair, PublicKey, clusterApiUrl } from '@solana/web3.js';
+import { getOrCreateAssociatedTokenAccount, transfer } from '@solana/spl-token';
+import bs58 from 'bs58';
+
 export default async function handler(req, res) {
-  // CORS Headers
+  // CORS Headers for Frontend
+  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
 
-  // GET Request Test
-  if (req.method === 'GET') {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, message: 'Method Not Allowed' });
+  }
+
+  const { receiverAddress, amount } = req.body;
+
+  if (!receiverAddress || !amount) {
+    return res.status(400).json({ success: false, message: 'Missing parameters' });
+  }
+
+  try {
+    // Solana Mainnet Connection
+    const connection = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
+
+    // Admin Keypair from Vercel ENV
+    const secretKey = bs58.decode(process.env.SOLANA_PRIVATE_KEY);
+    const adminKeypair = Keypair.fromSecretKey(secretKey);
+
+    // LORCA Token Details (Decimal 9)
+    const LORCA_MINT_ADDRESS = new PublicKey("7RqpgT532tsYakbgnTXECC4MHTEGu5HzBxVAkAAHpump");
+    const receiverPublicKey = new PublicKey(receiverAddress);
+    const decimals = 9; // Updated Decimal = 9
+
+    // 1. Get/Create Admin's LORCA Token Account
+    const adminTokenAccount = await getOrCreateAssociatedTokenAccount(
+      connection,
+      adminKeypair,
+      LORCA_MINT_ADDRESS,
+      adminKeypair.publicKey
+    );
+
+    // 2. Get/Create Receiver's LORCA Token Account
+    const receiverTokenAccount = await getOrCreateAssociatedTokenAccount(
+      connection,
+      adminKeypair, // Admin pays gas fee if account creation is needed
+      LORCA_MINT_ADDRESS,
+      receiverPublicKey
+    );
+
+    // 3. Convert Amount to Raw Units (Decimal = 9)
+    const rawAmount = Math.floor(Number(amount) * Math.pow(10, decimals));
+
+    // 4. Transfer LORCA Tokens
+    const txHash = await transfer(
+      connection,
+      adminKeypair,
+      adminTokenAccount.address,
+      receiverTokenAccount.address,
+      adminKeypair.publicKey,
+      rawAmount
+    );
+
     return res.status(200).json({
       success: true,
-      message: "Lorca Solana Withdrawal API active hai aur bilkul ready hai!"
+      message: 'LORCA Tokens transferred successfully!',
+      data: { txHash }
+    });
+
+  } catch (error) {
+    console.error("LORCA Transfer Error:", error);
+    return res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Token transfer failed' 
     });
   }
-
-  if (req.method === 'POST') {
-    try {
-      const { receiverAddress, amount } = req.body || {};
-
-      if (!receiverAddress || !amount) {
-        return res.status(400).json({
-          success: false,
-          message: "receiverAddress aur amount dono zaroori hain."
-        });
-      }
-
-      const privateKeyEnv = process.env.SOLANA_PRIVATE_KEY;
-      if (!privateKeyEnv) {
-        return res.status(500).json({
-          success: false,
-          message: "SOLANA_PRIVATE_KEY environment variable missing hai."
-        });
-      }
-
-      // Dynamic imports (prevents Vercel module crash)
-      const { 
-        Connection, 
-        Keypair, 
-        PublicKey, 
-        Transaction, 
-        SystemProgram, 
-        LAMPORTS_PER_SOL, 
-        clusterApiUrl 
-      } = await import('@solana/web3.js');
-      
-      const bs58 = (await import('bs58')).default;
-
-      let secretKey;
-      const cleanKey = privateKeyEnv.trim().replace(/^["']|["']$/g, '');
-      if (cleanKey.startsWith('[')) {
-        secretKey = Uint8Array.from(JSON.parse(cleanKey));
-      } else {
-        secretKey = bs58.decode(cleanKey);
-      }
-
-      const senderKeypair = Keypair.fromSecretKey(secretKey);
-      const connection = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
-      const toPublicKey = new PublicKey(receiverAddress);
-
-      const transferInstruction = SystemProgram.transfer({
-        fromPubkey: senderKeypair.publicKey,
-        toPubkey: toPublicKey,
-        lamports: Math.round(amount * LAMPORTS_PER_SOL),
-      });
-
-      const transaction = new Transaction().add(transferInstruction);
-
-      const { blockhash } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = senderKeypair.publicKey;
-
-      const signature = await connection.sendTransaction(transaction, [senderKeypair]);
-
-      return res.status(200).json({
-        success: true,
-        message: "Solana Transfer Successful!",
-        data: {
-          txHash: signature,
-          sender: senderKeypair.publicKey.toBase58(),
-          receiver: receiverAddress,
-          amount: amount
-        }
-      });
-
-    } catch (error) {
-      return res.status(500).json({
-        success: false,
-        message: "Solana Execution Error",
-        error: error.message
-      });
-    }
-  }
-
-  return res.status(405).json({ success: false, message: "Method Not Allowed" });
 }
