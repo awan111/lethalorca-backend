@@ -32,21 +32,21 @@ export default async function handler(req, res) {
       return res.status(500).json({ success: false, error: 'MASTER_PRIVATE_KEY missing in Vercel' });
     }
 
+    const mintAddress = process.env.LORCA_MINT_ADDRESS;
+    if (!mintAddress) {
+      return res.status(500).json({ success: false, error: 'LORCA_MINT_ADDRESS missing in Vercel' });
+    }
+
     const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
     const connection = new Connection(rpcUrl, 'confirmed');
 
-    // Private Key Handling (Base58 or Array String)
+    // Private Key Format Handling
     let masterWallet;
     const trimmedKey = privateKey.trim();
     if (trimmedKey.startsWith('[')) {
       masterWallet = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(trimmedKey)));
     } else {
       masterWallet = Keypair.fromSecretKey(bs58.decode(trimmedKey));
-    }
-
-    const mintAddress = process.env.LORCA_MINT_ADDRESS;
-    if (!mintAddress) {
-      return res.status(500).json({ success: false, error: 'LORCA_MINT_ADDRESS missing in Vercel' });
     }
 
     const tokenMintAddress = new PublicKey(mintAddress.trim());
