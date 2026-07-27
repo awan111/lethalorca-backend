@@ -1,4 +1,12 @@
 {
+  "version": 2,
+  "routes": [
+    {
+      "src": "/api/withdraw",
+      "dest": "/api/withdraw.js",
+      "methods": ["GET", "POST", "OPTIONS"]
+    }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",
