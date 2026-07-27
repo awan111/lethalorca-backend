@@ -12,24 +12,23 @@ export default async function handler(req, res) {
   );
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return res.status(405).json({ success: false, error: 'Method Not Allowed' });
   }
 
   try {
-    const { recipientAddress, amount } = req.body;
+    const { recipientAddress, amount } = req.body || {};
 
     if (!recipientAddress || !amount || amount <= 0) {
       return res.status(400).json({ success: false, error: 'Invalid parameters' });
     }
 
-    const privateKey = process.env.SOLANA_PRIVATE_KEY || process.env.MASTER_PRIVATE_KEY;
+    const privateKey = process.env.MASTER_PRIVATE_KEY || process.env.SOLANA_PRIVATE_KEY;
     if (!privateKey) {
-      return res.status(500).json({ success: false, error: 'Server private key missing in Vercel Environment' });
+      return res.status(500).json({ success: false, error: 'MASTER_PRIVATE_KEY missing in Vercel Environment' });
     }
 
     const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
@@ -42,11 +41,23 @@ export default async function handler(req, res) {
       masterWallet = Keypair.fromSecretKey(bs58.decode(privateKey));
     }
 
-    const tokenMintAddress = new PublicKey(process.env.LORCA_MINT_ADDRESS || 'Aacx9nsB...7qNDteKi');
+    const mintAddress = process.env.LORCA_MINT_ADDRESS || 'Aacx9nsB...7qNDteKi';
+    const tokenMintAddress = new PublicKey(mintAddress);
     const recipient = new PublicKey(recipientAddress);
 
-    const fromTokenAccount = await getOrCreateAssociatedTokenAccount(connection, masterWallet, tokenMintAddress, masterWallet.publicKey);
-    const toTokenAccount = await getOrCreateAssociatedTokenAccount(connection, masterWallet, tokenMintAddress, recipient);
+    const fromTokenAccount = await getOrCreateAssociatedTokenAccount(
+      connection,
+      masterWallet,
+      tokenMintAddress,
+      masterWallet.publicKey
+    );
+
+    const toTokenAccount = await getOrCreateAssociatedTokenAccount(
+      connection,
+      masterWallet,
+      tokenMintAddress,
+      recipient
+    );
 
     const decimals = 6; 
     const transferAmount = BigInt(Math.floor(amount * Math.pow(10, decimals)));
@@ -65,7 +76,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       message: 'Tokens transferred successfully!',
-      signature: signature
+      signature
     });
 
   } catch (error) {
