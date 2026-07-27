@@ -1,9 +1,8 @@
-import { Connection, PublicKey, Keypair } from '@solana/web3.js';
-import { getAssociatedTokenAddress, createTransferInstruction } from '@solana/spl-token';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+import { getOrCreateAssociatedTokenAccount, createTransferInstruction } from '@solana/spl-token';
 import bs58 from 'bs58';
 
 export default async function handler(req, res) {
-  // CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -13,39 +12,64 @@ export default async function handler(req, res) {
   );
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.status(200).end();
+    return;
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
   try {
-    const { walletAddress, amount } = req.body;
+    const { recipientAddress, amount } = req.body;
 
-    if (!walletAddress || !amount) {
-      return res.status(400).json({ error: 'Missing parameters' });
+    if (!recipientAddress || !amount || amount <= 0) {
+      return res.status(400).json({ success: false, error: 'Invalid parameters' });
     }
 
-    // Direct Base58 private key decode (No array brackets needed anymore!)
-    const privateKeyBytes = bs58.decode(process.env.MASTER_PRIVATE_KEY);
-    const fromWallet = Keypair.fromSecretKey(privateKeyBytes);
+    const privateKey = process.env.SOLANA_PRIVATE_KEY || process.env.MASTER_PRIVATE_KEY;
+    if (!privateKey) {
+      return res.status(500).json({ success: false, error: 'Server private key missing in Vercel Environment' });
+    }
 
-    const mintAddress = new PublicKey(process.env.TOKEN_MINT_ADDRESS);
-    const toWallet = new PublicKey(walletAddress);
+    const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    const connection = new Connection(rpcUrl, 'confirmed');
 
-    const connection = new Connection("https://api.mainnet-beta.solana.com", "confirmed");
+    let masterWallet;
+    if (privateKey.startsWith('[')) {
+      masterWallet = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(privateKey)));
+    } else {
+      masterWallet = Keypair.fromSecretKey(bs58.decode(privateKey));
+    }
 
-    const fromTokenAccount = await getAssociatedTokenAddress(mintAddress, fromWallet.publicKey);
-    const toTokenAccount = await getAssociatedTokenAddress(mintAddress, toWallet);
+    const tokenMintAddress = new PublicKey(process.env.LORCA_MINT_ADDRESS || 'Aacx9nsB...7qNDteKi');
+    const recipient = new PublicKey(recipientAddress);
 
-    const transaction = new Connection(); // Custom execution transaction build structure
-    // (Aapka transaction logic yahan successfully run ho jayega)
+    const fromTokenAccount = await getOrCreateAssociatedTokenAccount(connection, masterWallet, tokenMintAddress, masterWallet.publicKey);
+    const toTokenAccount = await getOrCreateAssociatedTokenAccount(connection, masterWallet, tokenMintAddress, recipient);
 
-    return res.status(200).json({ success: true, message: 'Withdraw successful' });
+    const decimals = 6; 
+    const transferAmount = BigInt(Math.floor(amount * Math.pow(10, decimals)));
+
+    const transactionInstruction = createTransferInstruction(
+      fromTokenAccount.address,
+      toTokenAccount.address,
+      masterWallet.publicKey,
+      transferAmount
+    );
+
+    const { web3 } = await import('@solana/web3.js');
+    const transaction = new web3.Transaction().add(transactionInstruction);
+    const signature = await web3.sendAndConfirmTransaction(connection, transaction, [masterWallet]);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Tokens transferred successfully!',
+      signature: signature
+    });
 
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: error.message || 'Internal Server Error' });
+    console.error('Withdrawal error:', error);
+    return res.status(500).json({ success: false, error: error.message || 'Transaction failed' });
   }
 }
