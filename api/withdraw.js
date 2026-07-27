@@ -17,13 +17,15 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  // Browser testing (GET)
   if (req.method === 'GET') {
     return res.status(200).json({
       success: true,
-      message: "Lorca Solana Withdrawal API active hai!"
+      message: "Lorca Solana Withdrawal API is active and ready!"
     });
   }
 
+  // Withdrawal logic (POST)
   if (req.method === 'POST') {
     try {
       const { receiverAddress, amount } = req.body || {};
@@ -31,43 +33,45 @@ export default async function handler(req, res) {
       if (!receiverAddress || !amount) {
         return res.status(400).json({
           success: false,
-          message: "receiverAddress aur amount zaroori hain."
+          message: "receiverAddress aur amount dono required hain."
         });
       }
 
-      // 1. Solana Mainnet Connection (Mainnet Beta)
+      // 1. Solana Connection Setup (Mainnet Beta)
       const connection = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
 
-      // 2. Private Key load karke Sender Keypair banana
+      // 2. Load Secret Key from Vercel Environment Variables
       const privateKeyEnv = process.env.SOLANA_PRIVATE_KEY;
       if (!privateKeyEnv) {
         throw new Error("Server Environment Variable (SOLANA_PRIVATE_KEY) set nahi hai.");
       }
+
       const secretKey = bs58.decode(privateKeyEnv);
       const senderKeypair = Keypair.fromSecretKey(secretKey);
 
-      // 3. Receiver PublicKey Validate karna
+      // 3. Receiver Address Verification
       const toPublicKey = new PublicKey(receiverAddress);
 
-      // 4. Transfer Instruction (Amount SOL ko Lamports mein convert karein)
+      // 4. Create Transfer Instruction
       const transferInstruction = SystemProgram.transfer({
         fromPubkey: senderKeypair.publicKey,
         toPubkey: toPublicKey,
-        lamports: amount * LAMPORTS_PER_SOL,
+        lamports: Math.round(amount * LAMPORTS_PER_SOL), // SOL to Lamports
       });
 
       const transaction = new Transaction().add(transferInstruction);
 
-      // 5. Recent Blockhash fetch karke Sign aur Send karna
+      // 5. Fetch Latest Blockhash & Sign Transaction
       const { blockhash } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = senderKeypair.publicKey;
 
+      // 6. Send Transaction to Solana Network
       const signature = await connection.sendTransaction(transaction, [senderKeypair]);
 
       return res.status(200).json({
         success: true,
-        message: "Phantom Transfer Successfully Completed!",
+        message: "Solana withdrawal request complete ho gayi hai!",
         data: {
           txHash: signature,
           sender: senderKeypair.publicKey.toBase58(),
