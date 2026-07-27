@@ -1,15 +1,4 @@
-const { 
-  Connection, 
-  Keypair, 
-  PublicKey, 
-  Transaction, 
-  SystemProgram, 
-  LAMPORTS_PER_SOL, 
-  clusterApiUrl 
-} = require('@solana/web3.js');
-const bs58 = require('bs58');
-
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -17,10 +6,11 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  // GET Request Test
   if (req.method === 'GET') {
     return res.status(200).json({
       success: true,
-      message: "Lorca Solana Withdrawal API active hai!"
+      message: "Lorca Solana Withdrawal API active hai aur bilkul ready hai!"
     });
   }
 
@@ -31,7 +21,7 @@ module.exports = async function handler(req, res) {
       if (!receiverAddress || !amount) {
         return res.status(400).json({
           success: false,
-          message: "receiverAddress aur amount zaroori hain."
+          message: "receiverAddress aur amount dono zaroori hain."
         });
       }
 
@@ -39,23 +29,29 @@ module.exports = async function handler(req, res) {
       if (!privateKeyEnv) {
         return res.status(500).json({
           success: false,
-          message: "SOLANA_PRIVATE_KEY environment variable set nahi hai."
+          message: "SOLANA_PRIVATE_KEY environment variable missing hai."
         });
       }
 
+      // Dynamic imports (prevents Vercel module crash)
+      const { 
+        Connection, 
+        Keypair, 
+        PublicKey, 
+        Transaction, 
+        SystemProgram, 
+        LAMPORTS_PER_SOL, 
+        clusterApiUrl 
+      } = await import('@solana/web3.js');
+      
+      const bs58 = (await import('bs58')).default;
+
       let secretKey;
-      try {
-        if (privateKeyEnv.trim().startsWith('[')) {
-          secretKey = Uint8Array.from(JSON.parse(privateKeyEnv));
-        } else {
-          secretKey = bs58.decode(privateKeyEnv.trim());
-        }
-      } catch (e) {
-        return res.status(500).json({
-          success: false,
-          message: "Private Key Format Invalid hai.",
-          error: e.message
-        });
+      const cleanKey = privateKeyEnv.trim().replace(/^["']|["']$/g, '');
+      if (cleanKey.startsWith('[')) {
+        secretKey = Uint8Array.from(JSON.parse(cleanKey));
+      } else {
+        secretKey = bs58.decode(cleanKey);
       }
 
       const senderKeypair = Keypair.fromSecretKey(secretKey);
@@ -78,7 +74,7 @@ module.exports = async function handler(req, res) {
 
       return res.status(200).json({
         success: true,
-        message: "Transfer Success!",
+        message: "Solana Transfer Successful!",
         data: {
           txHash: signature,
           sender: senderKeypair.publicKey.toBase58(),
@@ -97,4 +93,4 @@ module.exports = async function handler(req, res) {
   }
 
   return res.status(405).json({ success: false, message: "Method Not Allowed" });
-};
+}
