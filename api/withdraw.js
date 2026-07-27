@@ -1,94 +1,56 @@
-import { Connection, Keypair, PublicKey } from '@solana/web3.js';
-import { getOrCreateAssociatedTokenAccount, createTransferInstruction } from '@solana/spl-token';
-import bs58 from 'bs58';
+// api/withdraw.js
 
 export default async function handler(req, res) {
-  // CORS Headers
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  // CORS Headers (Browser requests allow karne ke liye)
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+  // Preflight OPTIONS request handle karne ke liye
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+  // Sirf POST request accept karein
+  if (req.method === 'POST') {
+    try {
+      const { userId, amount, paymentMethod, accountNumber } = req.body;
+
+      // Validation
+      if (!userId || !amount || !accountNumber) {
+        return res.status(400).json({
+          success: false,
+          message: "Tamam required fields (userId, amount, accountNumber) muhayya karein."
+        });
+      }
+
+      // Yahan apna DB logic ya withdrawal processing code likhein
+      // Example:
+      const transactionId = "TXN_" + Date.now();
+
+      return res.status(200).json({
+        success: true,
+        message: "Withdrawal request kamyabi se submit ho gayi hai.",
+        data: {
+          transactionId,
+          userId,
+          amount,
+          status: "Pending"
+        }
+      });
+
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Server Error",
+        error: error.message
+      });
+    }
   }
 
-  try {
-    const { recipientAddress, amount } = req.body || {};
-
-    if (!recipientAddress || !amount || amount <= 0) {
-      return res.status(400).json({ success: false, error: 'Invalid parameters' });
-    }
-
-    const privateKey = process.env.MASTER_PRIVATE_KEY;
-    if (!privateKey) {
-      return res.status(500).json({ success: false, error: 'MASTER_PRIVATE_KEY is missing in Vercel' });
-    }
-
-    const mintAddress = process.env.LORCA_MINT_ADDRESS;
-    if (!mintAddress) {
-      return res.status(500).json({ success: false, error: 'LORCA_MINT_ADDRESS is missing in Vercel' });
-    }
-
-    const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
-    const connection = new Connection(rpcUrl, 'confirmed');
-
-    // Parse Private Key Safely
-    let masterWallet;
-    const cleanKey = privateKey.trim().replace(/^["']|["']$/g, '');
-    
-    if (cleanKey.startsWith('[')) {
-      masterWallet = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(cleanKey)));
-    } else {
-      masterWallet = Keypair.fromSecretKey(bs58.decode(cleanKey));
-    }
-
-    const tokenMintAddress = new PublicKey(mintAddress.trim().replace(/^["']|["']$/g, ''));
-    const recipient = new PublicKey(recipientAddress.trim());
-
-    const fromTokenAccount = await getOrCreateAssociatedTokenAccount(
-      connection,
-      masterWallet,
-      tokenMintAddress,
-      masterWallet.publicKey
-    );
-
-    const toTokenAccount = await getOrCreateAssociatedTokenAccount(
-      connection,
-      masterWallet,
-      tokenMintAddress,
-      recipient
-    );
-
-    const decimals = 6; 
-    const transferAmount = BigInt(Math.floor(amount * Math.pow(10, decimals)));
-
-    const transactionInstruction = createTransferInstruction(
-      fromTokenAccount.address,
-      toTokenAccount.address,
-      masterWallet.publicKey,
-      transferAmount
-    );
-
-    const { web3 } = await import('@solana/web3.js');
-    const transaction = new web3.Transaction().add(transactionInstruction);
-    const signature = await web3.sendAndConfirmTransaction(connection, transaction, [masterWallet]);
-
-    return res.status(200).json({
-      success: true,
-      message: 'Tokens transferred successfully!',
-      signature
-    });
-
-  } catch (error) {
-    console.error('Withdrawal error:', error);
-    return res.status(500).json({ success: false, error: error.message || 'Transaction failed' });
-  }
+  // Agar POST ke ilawa koi method ho
+  return res.status(405).json({
+    success: false,
+    message: "Method Not Allowed. Sirf POST request supported hai."
+  });
 }
