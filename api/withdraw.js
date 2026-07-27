@@ -1,22 +1,28 @@
 // api/withdraw.js
 
 export default async function handler(req, res) {
-  // CORS Headers (Browser requests allow karne ke liye)
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Preflight OPTIONS request handle karne ke liye
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Sirf POST request accept karein
+  // Browser testing (GET) ke liye basic message
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      success: true,
+      message: "Withdrawal API is active and running!"
+    });
+  }
+
+  // Actual Withdrawal processing (POST)
   if (req.method === 'POST') {
     try {
-      const { userId, amount, paymentMethod, accountNumber } = req.body;
+      const { userId, amount, paymentMethod, accountNumber } = req.body || {};
 
-      // Validation
       if (!userId || !amount || !accountNumber) {
         return res.status(400).json({
           success: false,
@@ -24,8 +30,6 @@ export default async function handler(req, res) {
         });
       }
 
-      // Yahan apna DB logic ya withdrawal processing code likhein
-      // Example:
       const transactionId = "TXN_" + Date.now();
 
       return res.status(200).json({
@@ -48,9 +52,8 @@ export default async function handler(req, res) {
     }
   }
 
-  // Agar POST ke ilawa koi method ho
   return res.status(405).json({
     success: false,
-    message: "Method Not Allowed. Sirf POST request supported hai."
+    message: "Method Not Allowed"
   });
 }
