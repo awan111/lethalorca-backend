@@ -3,6 +3,7 @@ import { getOrCreateAssociatedTokenAccount, createTransferInstruction } from '@s
 import bs58 from 'bs58';
 
 export default async function handler(req, res) {
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -26,7 +27,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: 'Invalid parameters' });
     }
 
-    const privateKey = process.env.MASTER_PRIVATE_KEY || process.env.SOLANA_PRIVATE_KEY;
+    const privateKey = process.env.MASTER_PRIVATE_KEY;
     if (!privateKey) {
       return res.status(500).json({ success: false, error: 'MASTER_PRIVATE_KEY missing in Vercel' });
     }
@@ -34,15 +35,21 @@ export default async function handler(req, res) {
     const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
     const connection = new Connection(rpcUrl, 'confirmed');
 
+    // Private Key Handling (Base58 or Array String)
     let masterWallet;
-    if (privateKey.startsWith('[')) {
-      masterWallet = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(privateKey)));
+    const trimmedKey = privateKey.trim();
+    if (trimmedKey.startsWith('[')) {
+      masterWallet = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(trimmedKey)));
     } else {
-      masterWallet = Keypair.fromSecretKey(bs58.decode(privateKey));
+      masterWallet = Keypair.fromSecretKey(bs58.decode(trimmedKey));
     }
 
-    const mintAddress = process.env.LORCA_MINT_ADDRESS || 'Aacx9nsB...7qNDteKi';
-    const tokenMintAddress = new PublicKey(mintAddress);
+    const mintAddress = process.env.LORCA_MINT_ADDRESS;
+    if (!mintAddress) {
+      return res.status(500).json({ success: false, error: 'LORCA_MINT_ADDRESS missing in Vercel' });
+    }
+
+    const tokenMintAddress = new PublicKey(mintAddress.trim());
     const recipient = new PublicKey(recipientAddress);
 
     const fromTokenAccount = await getOrCreateAssociatedTokenAccount(
