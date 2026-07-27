@@ -3,7 +3,7 @@ import { getOrCreateAssociatedTokenAccount, transfer } from '@solana/spl-token';
 import bs58 from 'bs58';
 
 export default async function handler(req, res) {
-  // CORS Headers for Frontend
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -34,12 +34,12 @@ export default async function handler(req, res) {
     const secretKey = bs58.decode(process.env.SOLANA_PRIVATE_KEY);
     const adminKeypair = Keypair.fromSecretKey(secretKey);
 
-    // LORCA Token Details (Decimal 9)
+    // LORCA Token Details (6 Decimals Precision)
     const LORCA_MINT_ADDRESS = new PublicKey("7RqpgT532tsYakbgnTXECC4MHTEGu5HzBxVAkAAHpump");
     const receiverPublicKey = new PublicKey(receiverAddress);
-    const decimals = 9; // Updated Decimal = 9
+    const decimals = 6;
 
-    // 1. Get/Create Admin's LORCA Token Account
+    // 1. Admin Token Account
     const adminTokenAccount = await getOrCreateAssociatedTokenAccount(
       connection,
       adminKeypair,
@@ -47,15 +47,15 @@ export default async function handler(req, res) {
       adminKeypair.publicKey
     );
 
-    // 2. Get/Create Receiver's LORCA Token Account
+    // 2. Receiver Token Account
     const receiverTokenAccount = await getOrCreateAssociatedTokenAccount(
       connection,
-      adminKeypair, // Admin pays gas fee if account creation is needed
+      adminKeypair,
       LORCA_MINT_ADDRESS,
       receiverPublicKey
     );
 
-    // 3. Convert Amount to Raw Units (Decimal = 9)
+    // 3. Convert Amount to Raw Units (Decimal = 6)
     const rawAmount = Math.floor(Number(amount) * Math.pow(10, decimals));
 
     // 4. Transfer LORCA Tokens
