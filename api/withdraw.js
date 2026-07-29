@@ -1,10 +1,10 @@
-import { Connection, Keypair, PublicKey, clusterApiUrl } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { getOrCreateAssociatedTokenAccount, transfer } from '@solana/spl-token';
 import bs58 from 'bs58';
 
 export default async function handler(req, res) {
-  // CORS Headers
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  // 1. CORS Headers Fix (For Vercel & GitHub Pages)
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader(
@@ -12,10 +12,12 @@ export default async function handler(req, res) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
+  // 2. Browser Preflight (OPTIONS) Check
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
+  // 3. Method Validation
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method Not Allowed' });
   }
@@ -27,19 +29,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Solana Mainnet Connection
-    const connection = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
+    // 4. Reliable RPC Endpoint (Helius / Fast RPC)
+    const RPC_URL = process.env.HELIUS_RPC_URL || "https://mainnet.helius-rpc.com/?api-key=e99cd0cc-8db8-40a8-b64d-ca9d7f082e66";
+    const connection = new Connection(RPC_URL, 'confirmed');
 
-    // Admin Keypair from Vercel ENV
+    // 5. Admin Keypair from Vercel ENV
+    if (!process.env.SOLANA_PRIVATE_KEY) {
+      throw new Error("SOLANA_PRIVATE_KEY is missing in Vercel Environment Variables");
+    }
     const secretKey = bs58.decode(process.env.SOLANA_PRIVATE_KEY);
     const adminKeypair = Keypair.fromSecretKey(secretKey);
 
-    // LORCA Token Details (6 Decimals Precision)
+    // 6. LORCA Token Details (6 Decimals)
     const LORCA_MINT_ADDRESS = new PublicKey("7RqpgT532tsYakbgnTXECC4MHTEGu5HzBxVAkAAHpump");
     const receiverPublicKey = new PublicKey(receiverAddress);
     const decimals = 6;
 
-    // 1. Admin Token Account
+    // 7. Get or Create Admin Token Account
     const adminTokenAccount = await getOrCreateAssociatedTokenAccount(
       connection,
       adminKeypair,
@@ -47,7 +53,7 @@ export default async function handler(req, res) {
       adminKeypair.publicKey
     );
 
-    // 2. Receiver Token Account
+    // 8. Get or Create Receiver Token Account
     const receiverTokenAccount = await getOrCreateAssociatedTokenAccount(
       connection,
       adminKeypair,
@@ -55,10 +61,10 @@ export default async function handler(req, res) {
       receiverPublicKey
     );
 
-    // 3. Convert Amount to Raw Units (Decimal = 6)
+    // 9. Convert Amount to Raw Units (Precision 6)
     const rawAmount = Math.floor(Number(amount) * Math.pow(10, decimals));
 
-    // 4. Transfer LORCA Tokens
+    // 10. Transfer LORCA Tokens
     const txHash = await transfer(
       connection,
       adminKeypair,
