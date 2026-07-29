@@ -1,4 +1,7 @@
 {
+  "rewrites": [
+    { "source": "/api/withdraw", "destination": "/api/withdraw.js" }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",
