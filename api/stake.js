@@ -1,56 +1,50 @@
 import { MongoClient } from 'mongodb';
 
-const uri = process.env.MONGODB_URI;
-let cachedClient = null;
-
-async function connectToDatabase() {
-  if (cachedClient) return cachedClient;
-  if (!uri) throw new Error('MONGODB_URI environment variable is missing');
-  
-  const client = new MongoClient(uri);
-  await client.connect();
-  cachedClient = client;
-  return client;
-}
-
 export default async function handler(req, res) {
-  // Set CORS headers
+  // Always set CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Content-Type'
   );
 
-  // Handle browser preflight OPTIONS request
+  // Handle preflight immediately without database call
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    return res.status(500).json({ success: false, error: 'MONGODB_URI variable missing on Vercel' });
+  }
+
+  let client;
   try {
-    const client = await connectToDatabase();
+    client = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
+    await client.connect();
     const db = client.db('lethalorca');
     const collection = db.collection('stakes');
 
     const { action, wallet } = req.query;
 
-    // Fetch active stakes for a specific wallet
     if (req.method === 'GET' && action === 'list') {
-      if (!wallet) return res.status(400).json({ error: 'Wallet address is required' });
+      if (!wallet) return res.status(400).json({ success: false, error: 'Wallet address required' });
       const stakes = await collection.find({ wallet }).toArray();
       return res.status(200).json({ success: true, stakes });
     }
 
-    // Create a new staking entry
     if (req.method === 'POST' && action === 'create') {
-      const { wallet, amount, poolId, days, apr } = req.body || {};
-      if (!wallet || !amount) {
-        return res.status(400).json({ error: 'Missing wallet address or stake amount' });
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+      const { wallet: userWallet, amount, poolId, days, apr } = body;
+
+      if (!userWallet || !amount) {
+        return res.status(400).json({ success: false, error: 'Missing wallet address or amount' });
       }
 
       const newStake = {
-        wallet,
+        wallet: userWallet,
         amount: parseFloat(amount),
         poolId: poolId || 'default-pool',
         days: parseInt(days) || 30,
@@ -63,10 +57,14 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, stake: newStake });
     }
 
-    return res.status(400).json({ error: 'Invalid action or HTTP method' });
+    return res.status(400).json({ success: false, error: 'Invalid action specified' });
 
   } catch (error) {
-    console.error('API Server Error:', error);
-    return res.status(500).json({ error: 'Internal Server Error', message: error.message });
+    console.error('API Error:', error);
+    return res.status(500).json({ success: false, error: error.message || 'Database connection error' });
+  } finally {
+    if (client) {
+      await client.close();
+    }
   }
 }
