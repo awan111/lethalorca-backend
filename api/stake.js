@@ -14,16 +14,16 @@ async function connectToDatabase() {
 }
 
 export default async function handler(req, res) {
-  // Set CORS Headers for all requests
+  // Set CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Content-Type'
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
-  // Handle Browser Preflight (OPTIONS) Check
+  // Handle browser preflight OPTIONS request
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -35,18 +35,18 @@ export default async function handler(req, res) {
 
     const { action, wallet } = req.query;
 
-    // GET Request: Fetch stakes for a wallet
+    // Fetch active stakes for a specific wallet
     if (req.method === 'GET' && action === 'list') {
-      if (!wallet) return res.status(400).json({ error: 'Wallet address required' });
+      if (!wallet) return res.status(400).json({ error: 'Wallet address is required' });
       const stakes = await collection.find({ wallet }).toArray();
       return res.status(200).json({ success: true, stakes });
     }
 
-    // POST Request: Create a new stake
+    // Create a new staking entry
     if (req.method === 'POST' && action === 'create') {
       const { wallet, amount, poolId, days, apr } = req.body || {};
       if (!wallet || !amount) {
-        return res.status(400).json({ error: 'Missing wallet or amount in request payload' });
+        return res.status(400).json({ error: 'Missing wallet address or stake amount' });
       }
 
       const newStake = {
@@ -63,10 +63,10 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, stake: newStake });
     }
 
-    return res.status(400).json({ error: 'Invalid action or request method' });
+    return res.status(400).json({ error: 'Invalid action or HTTP method' });
 
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('API Server Error:', error);
     return res.status(500).json({ error: 'Internal Server Error', message: error.message });
   }
 }
