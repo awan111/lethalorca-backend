@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "type": "module",
   "main": "api/stake.js",
+  "engines": {
+    "node": "18.x"
+  },
   "dependencies": {
     "mongodb": "^6.3.0",
-    "@solana/web3.js": "^1.91.0",
-    "@solana/spl-token": "^0.4.6",
+    "@solana/web3.js": "1.87.6",
+    "@solana/spl-token": "0.3.11",
     "bs58": "^5.0.0"
   },
   "overrides": {
