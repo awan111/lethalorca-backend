@@ -4,7 +4,7 @@
   "type": "module",
   "main": "api/stake.js",
   "engines": {
-    "node": "18.x"
+    "node": "24.x"
   },
   "dependencies": {
     "mongodb": "^6.3.0",
