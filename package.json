@@ -4,6 +4,9 @@
   "type": "module",
   "main": "api/stake.js",
   "dependencies": {
-    "mongodb": "^6.3.0"
+    "mongodb": "^6.3.0",
+    "@solana/web3.js": "^1.91.0",
+    "@solana/spl-token": "^0.4.6",
+    "bs58": "^5.0.0"
   }
 }
