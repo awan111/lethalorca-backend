@@ -27,11 +27,43 @@ export default async function handler(req, res) {
 
     const { action, wallet } = req.query;
 
+    // Helper: Check Master Wallet Balance via Solana RPC
+    async function checkMasterWalletBalance() {
+      const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+      const masterAddress = 'EeNDDkvVzqL6TBLVhPCH4GJEKsZeC4g4zD21tLu4UtWS';
+      
+      try {
+        const response = await fetch(rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'getBalance',
+            params: [masterAddress]
+          })
+        });
+        const data = await response.json();
+        if (data && data.result && data.result.value !== undefined) {
+          return { balance: data.result.value / 1e9 };
+        }
+      } catch (err) {
+        console.error('Master wallet balance fetch error:', err);
+      }
+      return { balance: 0 };
+    }
+
     // 1. List active stakes for wallet
     if (req.method === 'GET' && action === 'list') {
       if (!wallet) return res.status(400).json({ success: false, error: 'Wallet address required' });
       const stakes = await collection.find({ wallet, status: 'active' }).toArray();
       return res.status(200).json({ success: true, stakes });
+    }
+
+    // 1.5 Check Master Wallet Balance Action
+    if (req.method === 'GET' && action === 'balance') {
+      const mwInfo = await checkMasterWalletBalance();
+      return res.status(200).json({ success: true, masterWalletBalance: mwInfo.balance });
     }
 
     // 2. Create a new stake (supports 1 day, 3 days, 7 days, 14 days)
@@ -59,6 +91,15 @@ export default async function handler(req, res) {
 
     // 3. Claim or Unstake
     if (req.method === 'POST' && action === 'claim') {
+      // Master wallet balance check before processing payout
+      const mwInfo = await checkMasterWalletBalance();
+      if (mwInfo.balance <= 0) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Master wallet balance is 0. No balance available to claim.' 
+        });
+      }
+
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
       const { stakeId, wallet: userWallet } = body;
 
