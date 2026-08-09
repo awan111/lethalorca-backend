@@ -28,7 +28,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const RPC_URL = process.env.HELIUS_RPC_URL || "https://mainnet.helius-rpc.com/?api-key=e99cd0cc-8db8-40a8-b64d-ca9d7f082e66";
+    let rawRpc = process.env.HELIUS_RPC_URL || process.env.SOLANA_RPC_URL || "https://mainnet.helius-rpc.com/?api-key=e99cd0cc-8db8-40a8-b64d-ca9d7f082e66";
+    const RPC_URL = String(rawRpc).trim().replace(/^["'](.+)["']$/, '$1');
+
     const connection = new Connection(RPC_URL, 'confirmed');
 
     if (!process.env.SOLANA_PRIVATE_KEY) {
@@ -38,7 +40,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const secretKey = bs58.decode(process.env.SOLANA_PRIVATE_KEY);
+    const secretKey = bs58.decode(process.env.SOLANA_PRIVATE_KEY.trim().replace(/^["'](.+)["']$/, '$1'));
     const adminKeypair = Keypair.fromSecretKey(secretKey);
 
     const LORCA_MINT_ADDRESS = new PublicKey("7RqpgT532tsYakbgnTXECC4MHTEGu5HzBxVAkAAHpump");
