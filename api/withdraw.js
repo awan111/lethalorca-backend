@@ -31,9 +31,8 @@ export default async function handler(req, res) {
     let rawRpc = process.env.HELIUS_RPC_URL || process.env.SOLANA_RPC_URL || "";
     let RPC_URL = String(rawRpc).trim().replace(/^["'](.+)["']$/, '$1');
 
-    // Fallback if RPC URL is missing or doesn't start with http/https
     if (!RPC_URL || (!RPC_URL.startsWith('http://') && !RPC_URL.startsWith('https://'))) {
-      RPC_URL = "https://mainnet.helius-rpc.com/?api-key=e99cd0cc-8db8-40a8-b64d-ca9d7f082e66";
+      RPC_URL = "https://mainnet.helius-rpc.com/?api-key=e99cd0cc-21ab-4628-b44e-1da0b88f0f26";
     }
 
     const connection = new Connection(RPC_URL, 'confirmed');
