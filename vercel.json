@@ -7,15 +7,5 @@
       "source": "/api/orca-runner/claim",
       "destination": "/api/orca-runner/claim.js"
     }
-  ],
-  "env": {
-    "SOLANA_RPC_URL": {
-      "description": "Solana RPC URL",
-      "required": true
-    },
-    "SOLANA_PRIVATE_KEY": {
-      "description": "Dev wallet private key as JSON array",
-      "required": true
-    }
-  }
+  ]
 }
