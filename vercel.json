@@ -1,7 +1,4 @@
 {
-  "buildCommand": "npm install",
-  "devCommand": "node api/transfer.js",
-  "installCommand": "npm install",
   "rewrites": [
     {
       "source": "/api/orca-runner/claim",
