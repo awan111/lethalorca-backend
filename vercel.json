@@ -1,13 +1,21 @@
 {
-  "headers": [
+  "buildCommand": "npm install",
+  "devCommand": "node api/transfer.js",
+  "installCommand": "npm install",
+  "rewrites": [
     {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Credentials", "value": "true" },
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,PATCH,DELETE,POST,PUT" },
-        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Content-Type" }
-      ]
+      "source": "/api/orca-runner/claim",
+      "destination": "/api/orca-runner/claim.js"
     }
-  ]
+  ],
+  "env": {
+    "SOLANA_RPC_URL": {
+      "description": "Solana RPC URL",
+      "required": true
+    },
+    "SOLANA_PRIVATE_KEY": {
+      "description": "Dev wallet private key as JSON array",
+      "required": true
+    }
+  }
 }
