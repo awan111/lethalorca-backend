@@ -1,8 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/api/orca-runner/claim",
-      "destination": "/api/orca-runner/claim.js"
+      "source": "/(.*)",
+      "destination": "/server.js"
     }
   ]
 }
