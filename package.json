@@ -2,14 +2,15 @@
   "name": "lethalorca-backend",
   "version": "1.0.0",
   "type": "module",
-  "main": "api/stake.js",
+  "main": "api/index.js",
   "scripts": {
-    "start": "node api/stake.js"
+    "start": "node api/index.js"
   },
   "engines": {
-    "node": "24.x"
+    "node": "18.x"
   },
   "dependencies": {
+    "express": "^4.19.2",
     "mongodb": "^6.3.0",
     "@solana/web3.js": "1.87.6",
     "@solana/spl-token": "0.3.11",
