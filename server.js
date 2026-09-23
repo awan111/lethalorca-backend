@@ -1,143 +1,123 @@
 const express = require('express');
+
 const app = express();
+app.use(express.json({ limit: '16kb' }));
 
-app.use(express.json());
+const mintAddress = '7RqpgT532tsYakbgnTXECC4MHTEGu5HzBxVAkAAHpump';
+const botToken = process.env.TELEGRAM_BOT_TOKEN;
+const targetChatId = process.env.TELEGRAM_CHAT_ID;
 
-const botToken = process.env.BOT_TOKEN || "8689687590:AAHSzJ_36tERZZzo4LhSMIavF30lUZI18wE";
-const mintAddress = "7RqpgT532tsYakbgnTXECC4MHTEGu5HzBxVAkAAHpump";
-const targetChatId = "7586392121";
+function telegramConfigured() {
+  return Boolean(botToken && targetChatId);
+}
 
-// 1. Root Route
-app.get('/', (req, res) => {
+async function sendTelegramMessage(chatId, text) {
+  if (!telegramConfigured()) {
+    throw new Error('Telegram environment variables are not configured');
+  }
+
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: 'Markdown',
+      disable_web_page_preview: true
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Telegram API returned ${response.status}`);
+  }
+
+  return response.json();
+}
+
+app.get('/', (_req, res) => {
   res.send('LethalOrca Backend is Live!');
 });
 
-// 2. Main Webhook Handler (Telegram & Helius Combined)
+// Public website alerts. Credentials stay server-side in Vercel environment variables.
+app.post('/api/telegram-alert', async (req, res) => {
+  if (!telegramConfigured()) {
+    return res.status(500).json({ success: false, error: 'Telegram is not configured' });
+  }
+
+  const wallet = typeof req.body?.wallet === 'string' ? req.body.wallet.trim() : '';
+  const turnstileToken = typeof req.body?.turnstileToken === 'string' ? req.body.turnstileToken : '';
+
+  if (wallet.length < 32 || wallet.length > 44) {
+    return res.status(400).json({ success: false, error: 'Invalid wallet address' });
+  }
+
+  // Keep this hook ready for Turnstile verification when a server-side secret is configured.
+  // The browser only sends the public site token; never trust it as a secret.
+  if (!turnstileToken) {
+    return res.status(400).json({ success: false, error: 'Captcha verification is required' });
+  }
+
+  try {
+    await sendTelegramMessage(
+      targetChatId,
+      `💎 New Airdrop Submission!\n\nWallet: ${wallet}`
+    );
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Telegram alert error:', error);
+    return res.status(502).json({ success: false, error: 'Unable to send alert' });
+  }
+});
+
+// Telegram bot and Helius webhook handler.
 app.post('/api/webhook', async (req, res) => {
+  if (!telegramConfigured()) {
+    return res.status(500).json({ ok: false, error: 'Telegram is not configured' });
+  }
+
   try {
     const body = req.body;
 
-    // --- CASE A: Telegram Bot Message ---
-    if (body.message || body.callback_query) {
+    if (body?.message?.text) {
       const message = body.message;
-      if (!message || !message.text) return res.status(200).json({ ok: true });
-
-      const chatId = message.chat.id;
       const text = message.text.trim();
-      let replyText = "";
+      let replyText = 'Unknown command. Use /start';
 
-      if (text === "/start" || text === "/help") {
-        replyText = "🤖 LethalOrca ($LORCA) Bot Active!\n\nCommands:\n/price - Live Price & Market Cap\n/contract - Token Address\n/roadmap - Project Phases\n/socials - Links";
-      } else if (text === "/price") {
-        let liveDataFound = false;
-        let priceUsd = "N/A";
-        let marketCap = "N/A";
-        let change24h = "0%";
-        let sourceName = "";
-
-        try {
-          const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mintAddress}`);
-          const dexData = await dexRes.json();
-          const pair = dexData.pairs?.[0];
-          if (pair) {
-            priceUsd = pair.priceUsd ? `$${pair.priceUsd}` : "N/A";
-            const mcValue = pair.marketCap || pair.fdv;
-            marketCap = mcValue ? Number(mcValue).toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : "N/A";
-            change24h = pair.priceChange?.h24 !== undefined ? `${pair.priceChange.h24}%` : "0%";
-            sourceName = "DexScreener";
-            liveDataFound = true;
-          }
-        } catch (e) {
-          console.error("DexScreener error:", e);
-        }
-
-        if (!liveDataFound) {
-          try {
-            const pfRes = await fetch(`https://frontend-api.pump.fun/coins/${mintAddress}`, {
-              headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }
-            });
-            const pfData = await pfRes.json();
-            if (pfData && pfData.usd_market_cap) {
-              const mc = pfData.usd_market_cap;
-              const p = mc / 1000000000;
-              priceUsd = p < 0.0001 ? `$${p.toExponential(4)}` : `$${p.toFixed(9)}`;
-              marketCap = Number(mc).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-              sourceName = "Pump.fun";
-              liveDataFound = true;
-            }
-          } catch (e) {
-            console.error("Pump.fun error:", e);
-          }
-        }
-
-        const pumpUrl = `https://pump.fun/coin/${mintAddress}`;
-        const dexUrl = `https://dexscreener.com/solana/${mintAddress}`;
-
-        if (liveDataFound) {
-          replyText = `📊 $LORCA Stats (${sourceName}):\n\n💰 Price: ${priceUsd}\n📈 Market Cap: ${marketCap}\n🔄 24h Change: ${change24h}\n\n🔗 [DexScreener](${dexUrl}) | [Pump.fun](${pumpUrl})`;
-        } else {
-          replyText = `📊 $LORCA Live Stats:\n🔗 [Pump.fun](${pumpUrl})`;
-        }
-      } else if (text === "/contract") {
+      if (text === '/start' || text === '/help') {
+        replyText = '🤖 LethalOrca ($LORCA) Bot Active!\n\nCommands:\n/price - Live Price & Market Cap\n/contract - Token Address\n/roadmap - Project Phases\n/socials - Links';
+      } else if (text === '/contract') {
         replyText = `Contract: \`${mintAddress}\``;
-      } else if (text === "/roadmap") {
-        replyText = "🗺️ **Roadmap:** Phase 1 to Phase 4 in progress.";
-      } else if (text === "/socials") {
-        replyText = "🌐 Website: https://lethalorca.com/";
-      } else {
-        replyText = "Unknown command. Use /start";
+      } else if (text === '/roadmap') {
+        replyText = '🗺️ **Roadmap:** Phase 1 to Phase 4 in progress.';
+      } else if (text === '/socials') {
+        replyText = '🌐 Website: https://lethalorca.com/';
       }
 
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: replyText,
-          parse_mode: "Markdown",
-          disable_web_page_preview: true
-        }),
-      });
-
+      await sendTelegramMessage(message.chat.id, replyText);
       return res.status(200).json({ ok: true });
     }
 
-    // --- CASE B: Helius Webhook / Test Payload ---
-    // Foran 200 OK bhej dein taake Helius test pass ho jaye
-    res.status(200).json({ success: true, message: "Webhook received" });
-
     const transactions = Array.isArray(body) ? body : [body];
-    for (const tx of transactions) {
-      const signature = tx.signature;
-      if (!signature) continue; // Skip agar signature na ho (jaise test ping mein)
-
-      const txUrl = `https://solscan.io/tx/${signature}`;
+    await Promise.all(transactions.filter((tx) => tx?.signature).map((tx) => {
+      const txUrl = `https://solscan.io/tx/${tx.signature}`;
       const dexUrl = `https://dexscreener.com/solana/${mintAddress}`;
       const pumpUrl = `https://pump.fun/coin/${mintAddress}`;
+      return sendTelegramMessage(
+        targetChatId,
+        `🟢 **New Trade Alert!**\n\n🔗 [View TX](${txUrl}) | [DexScreener](${dexUrl}) | [Pump.fun](${pumpUrl})`
+      );
+    }));
 
-      const alertText = `🟢 **New Trade Alert!**\n\n🔗 [View TX](${txUrl}) | [DexScreener](${dexUrl}) | [Pump.fun](${pumpUrl})`;
-
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: targetChatId,
-          text: alertText,
-          parse_mode: "Markdown",
-          disable_web_page_preview: true
-        })
-      });
-    }
-
+    return res.status(200).json({ success: true });
   } catch (error) {
-    console.error("Error:", error);
-    if (!res.headersSent) {
-      return res.status(200).json({ success: false });
-    }
+    console.error('Webhook error:', error);
+    return res.status(500).json({ success: false });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
 
 module.exports = app;
